@@ -9,7 +9,9 @@ RUN echo "    UserKnownHostsFile /dev/null" >> /etc/ssh/ssh_config && \
 RUN mkdir /tensorflow
 WORKDIR "/tensorflow"
 RUN git clone https://github.com/tensorflow/benchmarks
+
 WORKDIR "/tensorflow/benchmarks"
+RUN git checkout 16af178ad312e8c1213efb27a5f227044228bfdf
 
 ARG port=2222
 RUN sed -i "s/[ #]\(.*Port \).*/ \1$port/g" /etc/ssh/ssh_config && \

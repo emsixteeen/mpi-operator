@@ -11,4 +11,8 @@ WORKDIR "/tensorflow"
 RUN git clone https://github.com/tensorflow/benchmarks
 WORKDIR "/tensorflow/benchmarks"
 
+ARG port=2222
+RUN sed -i "s/[ #]\(.*Port \).*/ \1$port/g" /etc/ssh/ssh_config && \
+    sed -i "s/#\(Port \).*/\1$port/g" /etc/ssh/sshd_config
+
 CMD ["/bin/bash"]

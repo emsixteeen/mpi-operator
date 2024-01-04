@@ -16,4 +16,7 @@ RUN sed -i "s/[ #]\(.*Port \).*/ \1$port/g" /etc/ssh/ssh_config && \
     sed -i "s/#\(Port \).*/\1$port/g" /etc/ssh/sshd_config && \
     sed -i "s/UsePAM yes/UsePAM no/g" /etc/ssh/sshd_config
 
+RUN useradd mpiuser
+RUN chown -Rv mpiuser /etc/ssh
+
 CMD ["/bin/bash"]

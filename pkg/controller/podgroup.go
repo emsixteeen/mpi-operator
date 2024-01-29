@@ -19,6 +19,8 @@ import (
 	"sort"
 
 	"github.com/google/go-cmp/cmp"
+	schedinformers "github.com/kubeflow/mpi-operator/pkg/generated/scheduling"
+	volcanoinformers "github.com/kubeflow/mpi-operator/pkg/generated/volcano"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,11 +30,9 @@ import (
 	"k8s.io/utils/pointer"
 	schedv1alpha1 "sigs.k8s.io/scheduler-plugins/apis/scheduling/v1alpha1"
 	schedclientset "sigs.k8s.io/scheduler-plugins/pkg/generated/clientset/versioned"
-	schedinformers "sigs.k8s.io/scheduler-plugins/pkg/generated/informers/externalversions"
 	schedinformer "sigs.k8s.io/scheduler-plugins/pkg/generated/informers/externalversions/scheduling/v1alpha1"
 	volcanov1beta1 "volcano.sh/apis/pkg/apis/scheduling/v1beta1"
 	volcanoclient "volcano.sh/apis/pkg/client/clientset/versioned"
-	volcanoinformers "volcano.sh/apis/pkg/client/informers/externalversions"
 	volcanopodgroupinformer "volcano.sh/apis/pkg/client/informers/externalversions/scheduling/v1beta1"
 
 	"github.com/kubeflow/mpi-operator/cmd/mpi-operator/app/options"
@@ -73,11 +73,9 @@ type VolcanoCtrl struct {
 	schedulerName       string
 }
 
-func NewVolcanoCtrl(c volcanoclient.Interface, watchNamespace string, pcLister schedulinglisters.PriorityClassLister) *VolcanoCtrl {
+func NewVolcanoCtrl(c volcanoclient.Interface, watchNamespaces []string, pcLister schedulinglisters.PriorityClassLister) *VolcanoCtrl {
 	var informerFactoryOpts []volcanoinformers.SharedInformerOption
-	if watchNamespace != metav1.NamespaceAll {
-		informerFactoryOpts = append(informerFactoryOpts, volcanoinformers.WithNamespace(watchNamespace))
-	}
+	informerFactoryOpts = append(informerFactoryOpts, volcanoinformers.WithNamespaces(watchNamespaces...))
 	informerFactory := volcanoinformers.NewSharedInformerFactoryWithOptions(c, 0, informerFactoryOpts...)
 	return &VolcanoCtrl{
 		Client:              c,
@@ -204,13 +202,11 @@ type SchedulerPluginsCtrl struct {
 
 func NewSchedulerPluginsCtrl(
 	c schedclientset.Interface,
-	watchNamespace, schedulerName string,
+	watchNamespaces []string, schedulerName string,
 	pcLister schedulinglisters.PriorityClassLister,
 ) *SchedulerPluginsCtrl {
 	var informerFactoryOpts []schedinformers.SharedInformerOption
-	if watchNamespace != metav1.NamespaceAll {
-		informerFactoryOpts = append(informerFactoryOpts, schedinformers.WithNamespace(watchNamespace))
-	}
+	informerFactoryOpts = append(informerFactoryOpts, schedinformers.WithNamespaces(watchNamespaces...))
 	pgInformerFactory := schedinformers.NewSharedInformerFactoryWithOptions(c, 0, informerFactoryOpts...)
 	return &SchedulerPluginsCtrl{
 		Client:              c,

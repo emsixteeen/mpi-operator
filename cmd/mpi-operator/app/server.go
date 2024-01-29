@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -29,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 	kubeapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/healthz"
-	kubeinformers "k8s.io/client-go/informers"
+	kubeinformers "github.com/kubeflow/mpi-operator/pkg/generated/kube"
 	kubeclientset "k8s.io/client-go/kubernetes"
 	clientgokubescheme "k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -45,7 +46,7 @@ import (
 	"github.com/kubeflow/mpi-operator/cmd/mpi-operator/app/options"
 	mpijobclientset "github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned"
 	kubeflowscheme "github.com/kubeflow/mpi-operator/pkg/client/clientset/versioned/scheme"
-	informers "github.com/kubeflow/mpi-operator/pkg/client/informers/externalversions"
+	informers "github.com/kubeflow/mpi-operator/pkg/generated/mpijob"
 	controllersv1 "github.com/kubeflow/mpi-operator/pkg/controller"
 	"github.com/kubeflow/mpi-operator/pkg/version"
 )
@@ -82,13 +83,6 @@ func Run(opt *options.ServerOption) error {
 		version.PrintVersionAndExit(apiVersion)
 	}
 
-	namespace := opt.Namespace
-	if namespace == corev1.NamespaceAll {
-		klog.Info("Using cluster scoped operator")
-	} else {
-		klog.Infof("Scoping operator to namespace %s", namespace)
-	}
-
 	// To help debugging, immediately log version.
 	klog.Infof("%+v", version.Info(apiVersion))
 
@@ -118,9 +112,45 @@ func Run(opt *options.ServerOption) error {
 	if err != nil {
 		return err
 	}
-	if !checkCRDExists(mpiJobClientSet, namespace) {
-		klog.Info("CRD doesn't exist. Exiting")
-		os.Exit(1)
+
+	namespaces := []string{opt.Namespace}
+	if namespaces[0] == corev1.NamespaceAll {
+		klog.Info("Using cluster scoped operator")
+	} else {
+		namespacesRegEx := namespaces[0]
+		namespaces = nil
+
+		r, err := regexp.Compile(namespacesRegEx)
+		if err != nil {
+			klog.Infof("unable to compile namespace regex %s: %s", namespacesRegEx, err)
+			os.Exit(2)
+		}
+
+		nsList, err := kubeClient.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			klog.Infof("error enumerating namespaces: %s", err)
+			os.Exit(2)
+		}
+
+		for _, ns := range nsList.Items {
+			if r.MatchString(ns.Name) {
+				namespaces = append(namespaces, ns.Name)
+			}
+		}
+
+		if len(namespaces) == 0 {
+			klog.Infof("no matching namespaces found for regex %s", namespacesRegEx)
+			os.Exit(2)
+		}
+
+		klog.Infof("Scoping operator to namespaces %s", namespaces)
+	}
+
+	for _, ns := range namespaces {
+		if !checkCRDExists(mpiJobClientSet, ns) {
+			klog.Info("CRD doesn't exist. Exiting")
+			os.Exit(1)
+		}
 	}
 
 	// Add mpi-job-controller types to the default Kubernetes Scheme so Events
@@ -134,10 +164,10 @@ func Run(opt *options.ServerOption) error {
 	run := func(ctx context.Context) {
 		var kubeInformerFactoryOpts []kubeinformers.SharedInformerOption
 		var kubeflowInformerFactoryOpts []informers.SharedInformerOption
-		if namespace != metav1.NamespaceAll {
-			kubeInformerFactoryOpts = append(kubeInformerFactoryOpts, kubeinformers.WithNamespace(namespace))
-			kubeflowInformerFactoryOpts = append(kubeflowInformerFactoryOpts, informers.WithNamespace(namespace))
-		}
+
+		kubeInformerFactoryOpts = append(kubeInformerFactoryOpts, kubeinformers.WithNamespaces(namespaces...))
+		kubeflowInformerFactoryOpts = append(kubeflowInformerFactoryOpts, informers.WithNamespaces(namespaces...))
+
 		kubeInformerFactory := kubeinformers.NewSharedInformerFactoryWithOptions(kubeClient, 0, kubeInformerFactoryOpts...)
 		kubeflowInformerFactory := informers.NewSharedInformerFactoryWithOptions(mpiJobClientSet, 0, kubeflowInformerFactoryOpts...)
 
@@ -153,7 +183,7 @@ func Run(opt *options.ServerOption) error {
 			kubeInformerFactory.Core().V1().Pods(),
 			kubeInformerFactory.Scheduling().V1().PriorityClasses(),
 			kubeflowInformerFactory.Kubeflow().V2beta1().MPIJobs(),
-			namespace, opt.GangSchedulingName)
+			namespaces, opt.GangSchedulingName)
 		if err != nil {
 			klog.Fatalf("Failed to setup the controller")
 		}

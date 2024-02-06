@@ -174,7 +174,7 @@ func (f *fixture) newController(clock clock.WithTicker) (*MPIJobController, info
 		k8sI.Scheduling().V1().PriorityClasses(),
 		i.Kubeflow().V2beta1().MPIJobs(),
 		clock,
-		metav1.NamespaceAll,
+		[]string{metav1.NamespaceAll},
 		f.gangSchedulingName,
 	)
 	if err != nil {

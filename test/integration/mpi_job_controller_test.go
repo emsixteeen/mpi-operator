@@ -855,7 +855,7 @@ func startController(
 		kubeInformerFactory.Core().V1().Pods(),
 		kubeInformerFactory.Scheduling().V1().PriorityClasses(),
 		mpiInformerFactory.Kubeflow().V2beta1().MPIJobs(),
-		metav1.NamespaceAll, schedulerName,
+		[]string{metav1.NamespaceAll}, schedulerName,
 	)
 	if err != nil {
 		panic(err)
